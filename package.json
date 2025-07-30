@@ -20,7 +20,12 @@
   "description": "",
   "devDependencies": {
     "@types/node": "^24.1.0",
+    "drizzle-kit": "^0.31.4",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.4",
+    "postgres": "^3.4.7"
   }
 }
