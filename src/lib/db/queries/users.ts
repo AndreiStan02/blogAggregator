@@ -15,6 +15,14 @@ export async function getUser(name: string) {
   return result[0];
 }
 
+export async function getUserById(id: string) {
+  const result = await db.select().from(users).where(eq(users.id, id));
+  if (result.length === 0) {
+    return;
+  }
+  return result[0];
+}
+
 export async function getAllUsers() {
     const result = await db.select({name: users.name}).from(users);
     return result;
