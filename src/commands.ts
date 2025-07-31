@@ -1,7 +1,8 @@
+import { url } from "inspector";
 import { readConfig, setUser } from "./config.js";
 import { fetchFeed } from "./fetchFeed.js";
 import { db } from "./lib/db/index.js";
-import { addFeed, getAllFeeds } from "./lib/db/queries/feeds.js";
+import { addFeed, createFeedFollow, deleteFeedFollow, getAllFeeds, getFeedByUrl, getFeedFollowsForUser } from "./lib/db/queries/feeds.js";
 import { resetDB } from "./lib/db/queries/reset.js";
 import { createUser, getAllUsers, getUser, getUserById } from "./lib/db/queries/users.js";
 import { Feed, User } from "src/lib/db/schema";
@@ -125,4 +126,64 @@ export async function handlerFeeds(cmdName: string, ...args: string[]) {
         console.log(`- URL: ${feed.url}`);
         console.log(`- User Name: ${user.name}`);
     }
+}
+
+export async function handlerFollow(cmdName: string, ...args: string[]) {
+    if (args.length != 1) {
+        throw new Error(`usage: ${cmdName} <url>`);
+    }
+
+    const config = readConfig();
+    const user = await getUser(config.currentUserName);
+    if(!user){
+        throw new Error("Error getting current user id");
+    }
+
+    const feed = await getFeedByUrl(args[0]);
+    if(!feed){
+        throw new Error("Error: No feed added with this url.");
+    }
+
+    const result = await createFeedFollow(user.id ,feed.id);
+    if(!result){
+        throw new Error("Error: couldnt create feed_follow entry.")
+    }
+    console.log(`- Feed Name: ${result.feedName}`);
+    console.log(`- User Name: ${result.userName}`);
+}
+
+export async function handlerFollowing(cmdName: string, ...args: string[]) {
+    const config = readConfig();
+    const user = await getUser(config.currentUserName);
+    if(!user){
+        throw new Error("Error getting current user id");
+    }
+
+    const feeds = await getFeedFollowsForUser(user.id);
+
+    console.log(`${user.name} follows this feeds:`);
+    for(const feed of feeds){
+        console.log(`- ${feed.feedName}`);
+    }
+}
+
+export async function handlerUnfollow(cmdName: string, ...args: string[]) {
+    if (args.length != 1) {
+        throw new Error(`usage: ${cmdName} <url>`);
+    }
+
+    const config = readConfig();
+    const user = await getUser(config.currentUserName);
+    if(!user){
+        throw new Error("Error getting current user id");
+    }
+
+    const feed = await getFeedByUrl(args[0]);
+    if(!feed){
+        throw new Error("Error: No feed added with this url.");
+    }
+
+    await deleteFeedFollow(user.id ,feed.id);
+
+    console.log(`You unfollowed: ${feed.name}`);
 }
