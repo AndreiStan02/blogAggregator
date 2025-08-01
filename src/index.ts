@@ -11,7 +11,8 @@ import {
   handlerFeeds,
   handlerFollow,
   handlerFollowing,
-  handlerUnfollow
+  handlerUnfollow,
+  handlerBrowse
 } from "./commands.js";
 
 async function main() {
@@ -36,6 +37,7 @@ async function main() {
   registerCommand(commandsRegistry, "follow", handlerFollow);
   registerCommand(commandsRegistry, "following", handlerFollowing);
   registerCommand(commandsRegistry, "unfollow", handlerUnfollow);
+  registerCommand(commandsRegistry, "browse", handlerBrowse);
 
   try {
     await runCommand(commandsRegistry, cmdName, ...cmdArgs);

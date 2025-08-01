@@ -1,8 +1,9 @@
 import { readConfig } from "src/config";
 import { db } from "..";
 import { feeds, feedsFollows, users } from "../schema";
-import { eq, lt, gte, ne , and } from 'drizzle-orm';
+import { eq, lt, gte, ne , and ,sql} from 'drizzle-orm';
 import { getUser, getUserById } from "./users";
+import { time } from "console";
 
 export async function addFeed(name: string, url: string, userId: string) {
     const [result] = await db.insert(feeds).values({ name: name, url: url, user_id: userId}).returning();
@@ -24,7 +25,7 @@ export async function getAllFeeds() {
 }
 
 export async function createFeedFollow(userId: string, feedId: string){
-    const [newFeedFollow] = await db.insert(feedsFollows).values({user_id: userId, feed_id: feedId});
+    const [newFeedFollow] = await db.insert(feedsFollows).values({user_id: userId, feed_id: feedId}).onConflictDoNothing();
 
     const result = await db.select({
         id: feedsFollows.id,
@@ -63,5 +64,14 @@ export async function getFeedFollowsForUser(userId: string){
         .innerJoin(feeds, eq(feeds.id, feedsFollows.feed_id))
         .where(eq(feedsFollows.user_id, userId));
     
+    return result;
+}
+
+export async function markFeedFetched(feedId: string){
+    await db.update(feeds).set({updatedAt: new Date(), last_fetched_ad: new Date()}).where(eq(feeds.id, feedId));
+}
+
+export async function getNextFeedToFetch(){
+    const [result] = await db.select().from(feeds).orderBy(sql`${feeds.last_fetched_ad} NULLS FIRST`).limit(1);
     return result;
 }

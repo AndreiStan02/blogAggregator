@@ -2,10 +2,11 @@ import { url } from "inspector";
 import { readConfig, setUser } from "./config.js";
 import { fetchFeed } from "./fetchFeed.js";
 import { db } from "./lib/db/index.js";
-import { addFeed, createFeedFollow, deleteFeedFollow, getAllFeeds, getFeedByUrl, getFeedFollowsForUser } from "./lib/db/queries/feeds.js";
+import { addFeed, createFeedFollow, deleteFeedFollow, getAllFeeds, getFeedByUrl, getFeedFollowsForUser, getNextFeedToFetch, markFeedFetched } from "./lib/db/queries/feeds.js";
 import { resetDB } from "./lib/db/queries/reset.js";
 import { createUser, getAllUsers, getUser, getUserById } from "./lib/db/queries/users.js";
 import { Feed, User } from "src/lib/db/schema";
+import { createPost, getPostsForUser } from "./lib/db/queries/posts.js";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
@@ -72,10 +73,48 @@ export async function handlerUsers(cmdName: string, ...args: string[]){
     }
 }
 
+function parseDuration(durationStr: string): number{
+    const regex = /^(\d+)(ms|s|m|h)$/;
+    const match = durationStr.match(regex);
+    
+    if (!match) {
+        throw new Error(`Invalid duration format: ${durationStr}`);
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+
+    switch (unit) {
+        case 'ms':
+        return value;
+        case 's':
+        return value * 1000;
+        case 'm':
+        return value * 60 * 1000;
+        case 'h':
+        return value * 60 * 60 * 1000;
+        default:
+        throw new Error(`Unsupported time unit: ${unit}`);
+    }
+}
+
 export async function handlerAgg(cmdName: string, ...args: string[]){
-    const rssFeed = await fetchFeed("https://www.wagslane.dev/index.xml");
-    const rssFeedStr = await JSON.stringify(rssFeed);
-    console.log(rssFeedStr);
+    if (args.length != 1) {
+        throw new Error(`usage: ${cmdName} <time_between_req>`);
+    }
+    scrapeFeeds();
+    console.log(`Collecting feeds every ${args[0]}`);
+    const time = parseDuration(args[0]);
+    const interval = setInterval(() => {
+        scrapeFeeds();
+    }, time);
+    await new Promise<void>((resolve) => {
+        process.on("SIGINT", () => {
+            console.log("Shutting down feed aggregator...");
+            clearInterval(interval);
+            resolve();
+        });
+    });
 }
 
 export async function handlerAddFeed(cmdName: string, ...args: string[]){
@@ -186,4 +225,37 @@ export async function handlerUnfollow(cmdName: string, ...args: string[]) {
     await deleteFeedFollow(user.id ,feed.id);
 
     console.log(`You unfollowed: ${feed.name}`);
+}
+
+async function scrapeFeeds() {
+    const nextFeed = await getNextFeedToFetch();
+    if(!nextFeed){
+        throw new Error("Error: There is no feed to be fetched.");
+    }
+    await markFeedFetched(nextFeed.id);
+    const rssFeed = await fetchFeed(nextFeed.url);
+    console.log(rssFeed.channel.title);
+    for(let item of rssFeed.channel.item){
+        createPost(item.title, nextFeed.url, nextFeed.id, new Date(item.pubDate), item.description);
+    }
+}
+
+export async function handlerBrowse(cmdName: string, ...args: string[]) {
+    let limit = "2";
+    if (args.length === 1) {
+        limit = args[0];
+    }
+
+    const config = readConfig();
+    const user = await getUser(config.currentUserName);
+    if(!user){
+        throw new Error("Error getting current user id");
+    }
+
+    console.log("Latest posts:");
+    const posts = await getPostsForUser(user.id, Number(limit));
+    for(let post of posts){
+        console.log(`- ${post.title}`);
+    }
+
 }
